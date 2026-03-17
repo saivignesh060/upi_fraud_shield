@@ -79,11 +79,15 @@ source .venv/Scripts/activate  # On Windows
 # 2. Install Python Dependencies
 pip install fastapi uvicorn pandas numpy scikit-learn xgboost shap websockets
 
-# 3. Generate Data & Train Model
-# Since the 100MB+ transaction CSV and compiled models are excluded from Git,
-# you must generate them locally before starting the server:
+# 3. Generate Dataset (Required) & Train Model (Optional)
+# The pre-trained models are already included in the repository! 
+# However, the 100MB+ transaction CSV is excluded due to file size limits.
+# You must generate the data locally before starting the server:
 python generate_dataset.py
-python train_models.py
+
+# (Optional) If you modify the generated data or feature engineering, 
+# you can retrain the models from scratch:
+# python train_models.py
 
 # 4. Start the FastAPI Server
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload

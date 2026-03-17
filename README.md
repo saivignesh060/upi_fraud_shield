@@ -127,5 +127,74 @@ Once both servers are running, access the dashboard.
 
 ---
 
+## 🚢 Production Deployment
+
+This section covers how to deploy UPI FraudShield beyond your local machine. The project has three distinct layers to deploy: the **Backend API**, the **Frontend Dashboard**, and the **ML Models**.
+
+### 🔷 Backend API (FastAPI) — Deploy to Render / Railway / EC2
+
+The FastAPI backend with the WebSocket stream can be deployed to any platform that supports Python.
+
+**Recommended: [Render](https://render.com/) (free tier available)**
+
+1. Push your code to GitHub (already done ✅).
+2. Create a new **Web Service** on Render, connecting it to your `upi_fraud_shield` repository.
+3. Set the following configuration:
+   - **Runtime:** Python 3
+   - **Build Command:** `pip install -r requirements.txt` *(see note below)*
+   - **Start Command:** `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+4. Add a `requirements.txt` to the project root:
+   ```
+   fastapi
+   uvicorn
+   pandas
+   numpy
+   scikit-learn
+   xgboost
+   shap
+   websockets
+   python-multipart
+   ```
+5. Before deploying, generate the dataset and ensure the `models/` folder is pushed to the repo (already done ✅).
+
+> **Note on Models:** The pre-trained XGBoost model files are already included in the repository. The backend will load them directly from disk on startup — **no retraining needed on the server**.
+
+> **Important on Data:** `upi_transactions.csv` is not shipped in the repo. The backend streams from this CSV at runtime. On a production server, either run `generate_dataset.py` once post-deploy via a shell command, or modify the API to use a database instead.
+
+---
+
+### 🔷 Frontend Dashboard (React) — Deploy to Vercel
+
+The Vite + React frontend can be deployed for free on [Vercel](https://vercel.com/).
+
+1. Go to [vercel.com](https://vercel.com/) and import your GitHub repository.
+2. Set the **Root Directory** to `dashboard`.
+3. Vercel will auto-detect Vite and configure the build. Confirm:
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `dist`
+4. Add an **Environment Variable** pointing to your deployed backend URL:
+   ```
+   VITE_API_URL=https://your-render-backend-url.onrender.com
+   ```
+5. Update `dashboard/src/App.tsx` to read this from the environment:
+   ```typescript
+   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+   const WS_URL = `${API_BASE.replace('https', 'wss').replace('http', 'ws')}/stream?tps=20&rows=10000`;
+   ```
+6. Deploy — Vercel handles the rest and gives you a public `*.vercel.app` URL.
+
+---
+
+### 🔷 ML Models — No Separate Deployment Needed
+
+The XGBoost classifier and scaler are `.json` / `.pkl` files bundled directly inside the repository and loaded by the FastAPI backend at startup. There is **no separate model server** required. The backend IS the model inference server.
+
+If you scale to high traffic in the future, consider:
+- Wrapping the model in a dedicated microservice
+- Using **ONNX** for cross-platform compatibility
+- Caching predictions by transaction signature using **Redis**
+
+---
+
 ## 🛡️ License & Terms
 Developed for demonstration and operational prototyping.

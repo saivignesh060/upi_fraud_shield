@@ -1,0 +1,14 @@
+{
+  "split": "Test",
+  "threshold": 0.4,
+  "precision": 0.4712,
+  "recall": 0.9779,
+  "f1_score": 0.636,
+  "roc_auc": 0.9926,
+  "false_positive_rate": 0.0363,
+  "true_positives": 2347,
+  "false_positives": 2634,
+  "true_negatives": 69966,
+  "false_negatives": 53,
+  "total_samples": 75000
+}

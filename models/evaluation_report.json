@@ -1,0 +1,42 @@
+{
+  "isolation_forest": {
+    "model": "Isolation Forest",
+    "true_positives": 8852,
+    "false_positives": 7148,
+    "true_negatives": 476852,
+    "false_negatives": 7148,
+    "precision": 0.5532,
+    "recall": 0.5532,
+    "f1_score": 0.5532,
+    "false_positive_rate": 0.0148
+  },
+  "xgboost": {
+    "split": "Test",
+    "threshold": 0.4,
+    "precision": 0.4712,
+    "recall": 0.9779,
+    "f1_score": 0.636,
+    "roc_auc": 0.9926,
+    "false_positive_rate": 0.0363,
+    "true_positives": 2347,
+    "false_positives": 2634,
+    "true_negatives": 69966,
+    "false_negatives": 53,
+    "total_samples": 75000
+  },
+  "prd_targets": {
+    "precision_target": 0.88,
+    "recall_target": 0.85,
+    "f1_target": 0.86,
+    "roc_auc_target": 0.93,
+    "fpr_target": 0.02
+  },
+  "prd_compliance": {
+    "precision_ok": false,
+    "recall_ok": true,
+    "f1_ok": false,
+    "roc_auc_ok": true,
+    "fpr_ok": false
+  },
+  "training_time_seconds": 60.8
+}

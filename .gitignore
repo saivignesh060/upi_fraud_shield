@@ -26,8 +26,6 @@ Thumbs.db
 data/
 *.csv
 temp_dummy/
-models/*.json
-models/*.pkl
 models/*.sav
 notebooks/.ipynb_checkpoints/
 __pycache__/

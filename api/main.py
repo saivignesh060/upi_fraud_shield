@@ -73,7 +73,7 @@ async def startup_event():
     print(f"[API] DISPLAY_THRESHOLD={DISPLAY_THRESHOLD}")
 
     print("[API] Loading SHAP Explainer...")
-    shap_explainer_model = load_explainer()
+    shap_explainer_model = load_explainer(model=xgb_model)
 
     print("[API] Loading User Profiles...")
     profile_engine = UserProfileEngine()

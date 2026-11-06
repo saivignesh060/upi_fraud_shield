@@ -12,7 +12,8 @@ import json
 import os
 
 EXPLAINER_PATH = os.path.join(os.path.dirname(__file__), "shap_explainer.pkl")
-FEATURE_NAMES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "xgb_feature_names.json")
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FEATURE_NAMES_PATH = os.path.join(_ROOT, "models", "xgb_feature_names.json")
 
 # Human-readable feature name mappings
 FEATURE_DISPLAY_NAMES = {
@@ -59,11 +60,25 @@ def build_explainer(model, X_background: pd.DataFrame) -> shap.TreeExplainer:
     return explainer
 
 
-def load_explainer() -> shap.TreeExplainer:
-    """Load saved SHAP explainer."""
-    if not os.path.exists(EXPLAINER_PATH):
-        raise FileNotFoundError(f"Explainer not found at {EXPLAINER_PATH}. Run build_explainer() first.")
-    return joblib.load(EXPLAINER_PATH)
+def load_explainer(model=None) -> shap.TreeExplainer:
+    """Load saved SHAP explainer; rebuild from model if the pickle is missing or incompatible."""
+    if os.path.exists(EXPLAINER_PATH):
+        try:
+            return joblib.load(EXPLAINER_PATH)
+        except Exception as exc:
+            print(f"[SHAP] pickle load failed ({type(exc).__name__}: {exc}); rebuilding TreeExplainer")
+    if model is None:
+        raise FileNotFoundError(
+            f"Explainer not found/unreadable at {EXPLAINER_PATH} and no model provided to rebuild."
+        )
+    # TreeExplainer is exact for boosted trees; background optional for predict path
+    explainer = shap.TreeExplainer(model)
+    try:
+        joblib.dump(explainer, EXPLAINER_PATH)
+        print(f"[SHAP] Explainer rebuilt → {EXPLAINER_PATH}")
+    except Exception as exc:
+        print(f"[SHAP] could not persist rebuilt explainer: {exc}")
+    return explainer
 
 
 def explain_transaction(X_row: pd.DataFrame, explainer: shap.TreeExplainer = None, top_k: int = 3) -> list:

@@ -39,3 +39,6 @@ __pycache__/
 dashboard/dist/
 dashboard/dist-ssr/
 dashboard/coverage/
+
+# Screenshot intermediates
+docs/_gif_frames/

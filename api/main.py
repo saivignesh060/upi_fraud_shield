@@ -38,6 +38,9 @@ profile_engine = None
 DISPLAY_THRESHOLD = 0.40
 _executor = ThreadPoolExecutor(max_workers=2)
 BATCH_SIZE = 256
+# Small adaptive batches for the live stream so the first message is not blocked
+# on scoring the entire CSV window (that bug made low tps look slower than high tps).
+STREAM_BATCH_SIZE = 32
 
 # Preloaded stream cache (built on first /stream or at startup if CSV present)
 _stream_cache = {
@@ -299,70 +302,70 @@ async def websocket_stream(websocket: WebSocket, tps: int = 20, rows: int = 1000
 
     interval = 1.0 / tps if tps > 0 else 0.05
     n = len(txns)
-    probs = np.empty(n, dtype=np.float64)
-
-    # Batch predict once up front (or in chunks to bound memory)
-    try:
-        for start in range(0, n, BATCH_SIZE):
-            end = min(start + BATCH_SIZE, n)
-            probs[start:end] = _predict_proba_batch(X_all.iloc[start:end])
-    except Exception as e:
-        await websocket.send_json({"error": f"Batch scoring failed: {e}"})
-        await websocket.close(code=1011, reason="Batch scoring failed")
-        return
-
     target_time = time.monotonic()
-    loop = asyncio.get_running_loop()
+    i = 0
 
-    for i, txn_dict in enumerate(txns):
+    while i < n:
+        # Score a small adaptive batch, then send each row immediately (no full-window wait)
+        end = min(i + STREAM_BATCH_SIZE, n)
         try:
-            fraud_prob = float(probs[i])
-            should_display = fraud_prob >= DISPLAY_THRESHOLD
-            should_block = fraud_prob >= BLOCK_THRESHOLD
-            _update_confusion(fraud_prob, int(txn_dict.get("fraud_label", 0)))
-
-            shap_top3 = []
-            nl_exp = {}
-            mitigation = None
-            fraud_type_predicted = txn_dict.get("fraud_type", "legitimate")
-
-            if should_display:
-                X_row = X_all.iloc[[i]]
-                user_profile = profile_engine.get_profile(txn_dict.get("user_id", "unknown"))
-                shap_top3, nl_exp, mitigation, fraud_type_predicted = await _attach_explainability(
-                    txn_dict, txn_dict, X_row, fraud_prob, user_profile
-                )
-
-            profile_engine.update_profile(txn_dict.get("user_id", "unknown"), txn_dict)
-
-            out_payload = {
-                **txn_dict,
-                "risk_score": round(fraud_prob, 6),
-                "should_display_alert": should_display,
-                "should_block": should_block,
-                "fraud_type_predicted": fraud_type_predicted,
-                "shap_top3": shap_top3,
-                "explanation": nl_exp,
-                "mitigation": mitigation,
-                "display_threshold": DISPLAY_THRESHOLD,
-            }
-            await websocket.send_json(out_payload)
-
-            # Monotonic-clock scheduler: catch up without drifting
-            target_time += interval
-            now = time.monotonic()
-            sleep_for = target_time - now
-            if sleep_for > 0:
-                await asyncio.sleep(sleep_for)
-            else:
-                # Behind schedule — yield briefly so the event loop stays healthy
-                await asyncio.sleep(0)
-        except WebSocketDisconnect:
-            print("[API] Stream client disconnected")
-            break
+            batch_probs = _predict_proba_batch(X_all.iloc[i:end])
         except Exception as e:
-            print(f"[API] Error processing transaction: {e}")
-            await asyncio.sleep(0)
+            await websocket.send_json({"error": f"Batch scoring failed: {e}"})
+            await websocket.close(code=1011, reason="Batch scoring failed")
+            return
+
+        for j, txn_dict in enumerate(txns[i:end]):
+            idx = i + j
+            try:
+                fraud_prob = float(batch_probs[j])
+                should_display = fraud_prob >= DISPLAY_THRESHOLD
+                should_block = fraud_prob >= BLOCK_THRESHOLD
+                _update_confusion(fraud_prob, int(txn_dict.get("fraud_label", 0)))
+
+                shap_top3 = []
+                nl_exp = {}
+                mitigation = None
+                fraud_type_predicted = txn_dict.get("fraud_type", "legitimate")
+
+                if should_display:
+                    X_row = X_all.iloc[[idx]]
+                    user_profile = profile_engine.get_profile(txn_dict.get("user_id", "unknown"))
+                    shap_top3, nl_exp, mitigation, fraud_type_predicted = await _attach_explainability(
+                        txn_dict, txn_dict, X_row, fraud_prob, user_profile
+                    )
+
+                profile_engine.update_profile(txn_dict.get("user_id", "unknown"), txn_dict)
+
+                out_payload = {
+                    **txn_dict,
+                    "risk_score": round(fraud_prob, 6),
+                    "should_display_alert": should_display,
+                    "should_block": should_block,
+                    "fraud_type_predicted": fraud_type_predicted,
+                    "shap_top3": shap_top3,
+                    "explanation": nl_exp,
+                    "mitigation": mitigation,
+                    "display_threshold": DISPLAY_THRESHOLD,
+                }
+                await websocket.send_json(out_payload)
+
+                # Monotonic-clock scheduler: catch up without drifting
+                target_time += interval
+                now = time.monotonic()
+                sleep_for = target_time - now
+                if sleep_for > 0:
+                    await asyncio.sleep(sleep_for)
+                else:
+                    await asyncio.sleep(0)
+            except WebSocketDisconnect:
+                print("[API] Stream client disconnected")
+                return
+            except Exception as e:
+                print(f"[API] Error processing transaction: {e}")
+                await asyncio.sleep(0)
+
+        i = end
 
 
 @app.get("/profile/{user_id}")

@@ -36,8 +36,15 @@ class NumpyEncoder(json.JSONEncoder):
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from models.isolation_forest import train as train_if, evaluate as eval_if, build_features as if_features
-from models.xgboost_classifier import train as train_xgb, build_features as xgb_features
+from models.isolation_forest import train as train_if, evaluate as eval_if
+from models.xgboost_classifier import (
+    train as train_xgb,
+    build_features as xgb_features,
+    time_based_user_split,
+    apply_user_baselines,
+    load_baselines,
+)
+from models.behavioral_profiler import build_profiles_from_dataframe
 from explainability.shap_explainer import build_explainer
 
 DATASET_PATH = "upi_transactions.csv"
@@ -50,35 +57,44 @@ def run():
     start_total = time.time()
 
     # ── LOAD DATA ─────────────────────────────────────────────
-    print("\n[Step 1/5] Loading dataset...")
+    print("\n[Step 1/6] Loading dataset...")
     t0 = time.time()
-    df = pd.read_csv(DATASET_PATH)
+    df = pd.read_csv(DATASET_PATH, low_memory=False)
     print(f"  Loaded {len(df):,} rows in {time.time()-t0:.1f}s")
     print(f"  Fraud: {df['fraud_label'].sum():,} ({df['fraud_label'].mean()*100:.2f}%)")
 
     # ── ISOLATION FOREST ──────────────────────────────────────
-    print("\n[Step 2/5] Training Isolation Forest (unsupervised)...")
+    print("\n[Step 2/6] Training Isolation Forest (unsupervised)...")
     t0 = time.time()
     if_model = train_if(df, contamination=0.032)
     if_metrics = eval_if(df, if_model)
     print(f"  Done in {time.time()-t0:.1f}s")
     print(f"  IF Recall: {if_metrics['recall']:.4f} | Precision: {if_metrics['precision']:.4f}")
 
-    # ── XGBOOST ───────────────────────────────────────────────
-    print("\n[Step 3/5] Training XGBoost classifier (supervised)...")
+    # ── XGBOOST (leakage-safe) ────────────────────────────────
+    print("\n[Step 3/6] Training XGBoost classifier (time-split, train baselines)...")
     t0 = time.time()
     xgb_model, encoders, xgb_metrics = train_xgb(df)
     print(f"  Done in {time.time()-t0:.1f}s")
 
-    # ── SHAP EXPLAINER ────────────────────────────────────────
-    print("\n[Step 4/5] Building SHAP TreeExplainer...")
+    # ── PROFILES from train legit only ────────────────────────
+    print("\n[Step 4/6] Rebuilding user profiles from TRAIN legitimate rows...")
     t0 = time.time()
-    X_sample, _, _ = xgb_features(df.head(2000), fit_encoders=False, encoders=encoders)
+    train_df, _, _ = time_based_user_split(df)
+    build_profiles_from_dataframe(train_df[train_df["fraud_label"] == 0])
+    print(f"  Done in {time.time()-t0:.1f}s")
+
+    # ── SHAP EXPLAINER (train background only) ────────────────
+    print("\n[Step 5/6] Building SHAP TreeExplainer (train background)...")
+    t0 = time.time()
+    baselines = load_baselines()
+    train_fe = apply_user_baselines(train_df, baselines)
+    X_sample, _, _ = xgb_features(train_fe.head(2000), fit_encoders=False, encoders=encoders)
     shap_explainer = build_explainer(xgb_model, X_sample)
     print(f"  Done in {time.time()-t0:.1f}s")
 
     # ── EVALUATION REPORT ─────────────────────────────────────
-    print("\n[Step 5/5] Generating evaluation report...")
+    print("\n[Step 6/6] Generating evaluation report...")
     report = {
         "isolation_forest": if_metrics,
         "xgboost": xgb_metrics,
@@ -107,11 +123,13 @@ def run():
     print("  M2 TRAINING COMPLETE")
     print("=" * 60)
     print(f"\n  XGBoost Performance (Test Set):")
-    print(f"    Precision  : {xgb_metrics['precision']:.4f}  {'✅' if xgb_metrics['precision'] >= 0.88 else '⚠️ below target'}")
-    print(f"    Recall     : {xgb_metrics['recall']:.4f}  {'✅' if xgb_metrics['recall'] >= 0.85 else '⚠️ below target'}")
-    print(f"    F1-Score   : {xgb_metrics['f1_score']:.4f}  {'✅' if xgb_metrics['f1_score'] >= 0.86 else '⚠️ below target'}")
-    print(f"    ROC-AUC    : {xgb_metrics['roc_auc']:.4f}  {'✅' if xgb_metrics['roc_auc'] >= 0.93 else '⚠️ below target'}")
-    print(f"    FPR        : {xgb_metrics['false_positive_rate']:.4f}  {'✅' if xgb_metrics['false_positive_rate'] <= 0.02 else '⚠️ above target'}")
+    print(f"    Threshold  : {xgb_metrics['threshold']:.6f}")
+    print(f"    Precision  : {xgb_metrics['precision']:.4f}")
+    print(f"    Recall     : {xgb_metrics['recall']:.4f}")
+    print(f"    F1-Score   : {xgb_metrics['f1_score']:.4f}")
+    print(f"    ROC-AUC    : {xgb_metrics['roc_auc']:.4f}")
+    print(f"    PR-AUC     : {xgb_metrics.get('pr_auc', float('nan')):.4f}")
+    print(f"    FPR        : {xgb_metrics['false_positive_rate']:.4f}")
     print(f"\n  Isolation Forest:")
     print(f"    Recall     : {if_metrics['recall']:.4f}")
     print(f"    Precision  : {if_metrics['precision']:.4f}")

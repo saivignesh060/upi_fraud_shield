@@ -20,8 +20,7 @@ UPI FraudShield combines advanced machine learning (XGBoost), Explainable AI (SH
 ### 🌐 SOC Dashboard & Threat Intelligence
 - **Live Network Feed:** Auto-scrolling, real-time feed of network traffic with instantaneous risk scoring.
 - **Actionable Alerts Queue:** Prioritized queue of flagged transactions displaying SHAP breakdown bars and mitigation recommendations.
-- **Geo-Spatial Telemetry:** Interactive India Map (`Leaflet.js`) visualizing geographically anomalous transactions. Features animated Bezier arcs tracing `location_jump` attacks between cities.
-- **Entity Fraud Network Graph:** Advanced Force-Directed Graph (`D3.js`) visualizing the bipartite connections between Users and Merchants. Instantly isolates and illuminates risky clusters and coordinated attack networks.
+- **Geo-Spatial Telemetry:** Interactive India Map (`Leaflet.js` + OpenStreetMap tiles with a CSS dark filter) visualizing geographically anomalous transactions. Features animated quadratic Bezier arcs tracing `location_jump` attacks between cities.
 
 ---
 
@@ -36,7 +35,7 @@ UPI FraudShield combines advanced machine learning (XGBoost), Explainable AI (SH
 **Frontend Dashboard:**
 *   **Core:** React 18, TypeScript, Vite
 *   **Styling:** TailwindCSS, Lucide React Icons
-*   **Charts & Viz:** Recharts, D3.js, Leaflet, React-Leaflet
+*   **Charts & Viz:** Recharts, Leaflet, React-Leaflet
 
 ---
 
@@ -46,13 +45,14 @@ UPI FraudShield combines advanced machine learning (XGBoost), Explainable AI (SH
 upi_fraud_detector/
 ├── api/                     # FastAPI backend application & WebSocket router
 ├── dashboard/               # React (Vite) Frontend application
-│   ├── src/                 # React components (GeoMap, NetworkGraph, etc.)
+│   ├── src/                 # React components (GeoMap, ThreatIntelligence, etc.)
 │   └── index.css            # Tailwind configuration & global styles
-├── data/                    # Generated datasets (upi_transactions.csv)
 ├── explainability/          # SHAP integration and Natural Language (NL) parsers
-├── models/                  # Trained artifacts (XGBoost), scalers, and training scripts
+├── models/                  # Trained artifacts (XGBoost), encoders, and training scripts
 ├── generate_dataset.py      # Core UPI transaction synthesis tool
 ├── train_models.py          # ML model training pipeline
+├── requirements.txt         # Python dependencies
+├── upi_transactions.csv     # Generated locally (gitignored); required at project root
 └── README.md                # Project documentation
 ```
 
@@ -74,18 +74,24 @@ Open a terminal and navigate to the project root:
 ```bash
 # 1. Create and activate a Virtual Environment
 python -m venv .venv
-source .venv/Scripts/activate  # On Windows
+# Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# Windows CMD:
+# .venv\Scripts\activate.bat
+# Linux / macOS / Git Bash:
+# source .venv/bin/activate   # or: source .venv/Scripts/activate on Windows Git Bash
 
 # 2. Install Python Dependencies
-pip install fastapi uvicorn pandas numpy scikit-learn xgboost shap websockets
+pip install -r requirements.txt
 
 # 3. Generate Dataset (Required) & Train Model (Optional)
-# The pre-trained models are already included in the repository! 
+# The pre-trained models are already included in the repository!
 # However, the 100MB+ transaction CSV is excluded due to file size limits.
-# You must generate the data locally before starting the server:
+# You must generate the data locally before starting the server.
+# Output path is the project root: upi_transactions.csv
 python generate_dataset.py
 
-# (Optional) If you modify the generated data or feature engineering, 
+# (Optional) If you modify the generated data or feature engineering,
 # you can retrain the models from scratch:
 # python train_models.py
 
@@ -102,14 +108,35 @@ Open a **new** terminal window and navigate to the `dashboard` directory:
 cd dashboard
 
 # 1. Install Node Dependencies
-# Note: Using react-leaflet@4.2.1 is recommended for React 18 compatibility
-npm install react-leaflet@4.2.1 leaflet d3 @types/leaflet @types/d3 --save
+# package.json already pins react-leaflet@^4.2.1 for React 18 compatibility
 npm install
 
 # 2. Start the Vite Development Server
 npm run dev
 ```
 *The frontend dashboard will run on `http://localhost:5173`. Open this URL in your browser.*
+
+---
+
+## 📊 Measured model metrics (test set)
+
+Leak-free training: **per-user chronological 70/15/15 split**, baselines from **train legitimate rows only**, threshold chosen on validation (max recall s.t. precision ≥ 0.5). Dataset uses `FRAUD_RATE=0.008` with hard negatives and overlapping fraud signals (see Limitations). Figures from `models/xgb_metrics.json` on this machine:
+
+| Metric | Value |
+|---|---|
+| Decision threshold | **0.794784** |
+| ROC-AUC | **0.8901** |
+| PR-AUC | **0.5572** |
+| Precision | **0.4993** |
+| Recall | **0.5434** |
+| F1 | **0.5204** |
+
+Stream throughput after precomputed features + batch predict + monotonic scheduler (**500** messages): **14.20 msg/s** at `tps=20`, **48.49 msg/s** at `tps=50`.
+
+### Limitations
+- Data is **synthetic**, not production UPI traffic.
+- Harder generator (~0.8% fraud, hard negatives, probabilistic/overlapping signatures, 1% train-only label noise) is still less messy than real fraud.
+- Users/merchants are shared across time splits; scores can still look optimistic vs fully unseen entities.
 
 ---
 
@@ -123,7 +150,6 @@ Once both servers are running, access the dashboard.
 2. **Threat Intelligence Tab:** 
    - Click the target icon in the sidebar to switch views.
    - **GeoMap:** Watch live drops of transactions across India. Look for red pulsing arcs indicating impossible travel (Location Jumps).
-   - **Network Graph:** Observe the D3 force simulation. Nodes with red glowing halos represent users heavily interacting with flagged fraudulent merchants.
 
 ---
 
@@ -141,21 +167,10 @@ The FastAPI backend with the WebSocket stream can be deployed to any platform th
 2. Create a new **Web Service** on Render, connecting it to your `upi_fraud_shield` repository.
 3. Set the following configuration:
    - **Runtime:** Python 3
-   - **Build Command:** `pip install -r requirements.txt` *(see note below)*
+   - **Build Command:** `pip install -r requirements.txt`
    - **Start Command:** `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
-4. Add a `requirements.txt` to the project root:
-   ```
-   fastapi
-   uvicorn
-   pandas
-   numpy
-   scikit-learn
-   xgboost
-   shap
-   websockets
-   python-multipart
-   ```
-5. Before deploying, generate the dataset and ensure the `models/` folder is pushed to the repo (already done ✅).
+4. The project root already includes `requirements.txt` (FastAPI, Uvicorn, pandas, numpy, scikit-learn, xgboost, shap, numba, websockets, python-multipart, joblib).
+5. Before deploying, generate the dataset at the **project root** (`python generate_dataset.py` → `upi_transactions.csv`) and ensure the `models/` folder is pushed to the repo (already done ✅).
 
 > **Note on Models:** The pre-trained XGBoost model files are already included in the repository. The backend will load them directly from disk on startup — **no retraining needed on the server**.
 
@@ -176,18 +191,14 @@ The Vite + React frontend can be deployed for free on [Vercel](https://vercel.co
    ```
    VITE_API_URL=https://your-render-backend-url.onrender.com
    ```
-5. Update `dashboard/src/App.tsx` to read this from the environment:
-   ```typescript
-   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-   const WS_URL = `${API_BASE.replace('https', 'wss').replace('http', 'ws')}/stream?tps=20&rows=10000`;
-   ```
+5. `dashboard/src/App.tsx` already reads `VITE_API_URL` and derives the WebSocket URL (`https` → `wss`, then `http` → `ws`), defaulting to `http://localhost:8000` for local dev.
 6. Deploy — Vercel handles the rest and gives you a public `*.vercel.app` URL.
 
 ---
 
 ### 🔷 ML Models — No Separate Deployment Needed
 
-The XGBoost classifier and scaler are `.json` / `.pkl` files bundled directly inside the repository and loaded by the FastAPI backend at startup. There is **no separate model server** required. The backend IS the model inference server.
+The XGBoost classifier and label encoders are `.json` / `.pkl` files bundled directly inside the repository and loaded by the FastAPI backend at startup. There is **no separate model server** required. The backend IS the model inference server.
 
 If you scale to high traffic in the future, consider:
 - Wrapping the model in a dedicated microservice

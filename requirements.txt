@@ -1,0 +1,14 @@
+fastapi==0.162.0
+uvicorn==0.54.0
+pandas==3.1.1
+numpy==2.5.4
+scikit-learn==1.9.1
+xgboost==3.4.1
+shap==0.54.1
+numba==0.68.1
+llvmlite==0.50.0
+websockets==17.4
+python-multipart==0.0.33
+joblib==1.6.0
+pytest==9.2.0
+httpx==0.28.1

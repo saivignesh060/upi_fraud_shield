@@ -1,28 +1,55 @@
 {
   "isolation_forest": {
     "model": "Isolation Forest",
-    "true_positives": 8852,
-    "false_positives": 7148,
-    "true_negatives": 476852,
-    "false_negatives": 7148,
-    "precision": 0.5532,
-    "recall": 0.5532,
-    "f1_score": 0.5532,
-    "false_positive_rate": 0.0148
+    "true_positives": 2046,
+    "false_positives": 13954,
+    "true_negatives": 482046,
+    "false_negatives": 1954,
+    "precision": 0.1279,
+    "recall": 0.5115,
+    "f1_score": 0.2046,
+    "false_positive_rate": 0.0281
   },
   "xgboost": {
     "split": "Test",
-    "threshold": 0.4,
-    "precision": 0.4712,
-    "recall": 0.9779,
-    "f1_score": 0.636,
-    "roc_auc": 0.9926,
-    "false_positive_rate": 0.0363,
-    "true_positives": 2347,
-    "false_positives": 2634,
-    "true_negatives": 69966,
-    "false_negatives": 53,
-    "total_samples": 75000
+    "threshold": 0.794784,
+    "precision": 0.4993,
+    "recall": 0.5434,
+    "f1_score": 0.5204,
+    "roc_auc": 0.8901,
+    "pr_auc": 0.5572,
+    "false_positive_rate": 0.0043,
+    "true_positives": 338,
+    "false_positives": 339,
+    "true_negatives": 78763,
+    "false_negatives": 284,
+    "total_samples": 79724,
+    "val_metrics": {
+      "split": "Val",
+      "threshold": 0.794784,
+      "precision": 0.5,
+      "recall": 0.5473,
+      "f1_score": 0.5226,
+      "roc_auc": 0.9148,
+      "pr_auc": 0.5611,
+      "false_positive_rate": 0.0048,
+      "true_positives": 347,
+      "false_positives": 347,
+      "true_negatives": 71672,
+      "false_negatives": 287,
+      "total_samples": 72653
+    },
+    "threshold_selection": {
+      "threshold": 0.7947837710380554,
+      "precision": 0.5,
+      "recall": 0.5473186119873817,
+      "cost": 3217.0,
+      "method": "max_recall_precision>=0.5",
+      "tp": 347,
+      "fp": 347,
+      "fn": 287,
+      "tn": 71672
+    }
   },
   "prd_targets": {
     "precision_target": 0.88,
@@ -33,10 +60,10 @@
   },
   "prd_compliance": {
     "precision_ok": false,
-    "recall_ok": true,
+    "recall_ok": false,
     "f1_ok": false,
-    "roc_auc_ok": true,
-    "fpr_ok": false
+    "roc_auc_ok": false,
+    "fpr_ok": true
   },
-  "training_time_seconds": 60.8
+  "training_time_seconds": 540.4
 }

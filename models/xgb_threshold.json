@@ -1,0 +1,15 @@
+{
+  "display_threshold": 0.7947837710380554,
+  "block_threshold": 0.9,
+  "selection": {
+    "threshold": 0.7947837710380554,
+    "precision": 0.5,
+    "recall": 0.5473186119873817,
+    "cost": 3217.0,
+    "method": "max_recall_precision>=0.5",
+    "tp": 347,
+    "fp": 347,
+    "fn": 287,
+    "tn": 71672
+  }
+}

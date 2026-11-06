@@ -219,6 +219,49 @@ def _estimate_distance(city_a: str, city_b: str) -> int:
     return CITY_DISTANCES.get(key, 800)  # default 800km if unknown
 
 
+MITIGATION_BY_FEATURE = {
+    "new device": "Step-up authentication: require OTP / biometric on unrecognized devices before settlement.",
+    "device": "Temporarily freeze device bindings and force re-KYC of registered UPI handles.",
+    "velocity": "Throttle UPI velocity: enforce a cool-down and per-window transaction caps.",
+    "count": "Throttle UPI velocity: enforce a cool-down and per-window transaction caps.",
+    "burst": "Throttle UPI velocity: enforce a cool-down and per-window transaction caps.",
+    "amount": "Hold high-value payouts for manual review and notify the account holder.",
+    "ratio": "Hold high-value payouts for manual review and notify the account holder.",
+    "z-score": "Hold high-value payouts for manual review and notify the account holder.",
+    "city": "Challenge geo-velocity anomalies; require in-app location confirmation.",
+    "location": "Challenge geo-velocity anomalies; require in-app location confirmation.",
+    "night": "Delay night-time settlements and send an out-of-band push confirmation.",
+    "hour": "Delay night-time settlements and send an out-of-band push confirmation.",
+    "time": "Delay night-time settlements and send an out-of-band push confirmation.",
+    "merchant": "Block first-time high-risk merchant categories pending analyst review.",
+    "risk": "Block first-time high-risk merchant categories pending analyst review.",
+}
+
+MITIGATION_BY_TYPE = {
+    "burst": "Rate-limit the VPA and require step-up auth for the next 30 minutes.",
+    "amount_spike": "Place a temporary hold on the payout and ask the user to confirm intent.",
+    "location_jump": "Flag impossible-travel; require secondary verification before release.",
+    "night_anomaly": "Queue for delayed settlement and notify the linked phone number.",
+    "device_switch": "Quarantine the new device ID until the user re-authenticates.",
+    "merchant_anomaly": "Block the merchant category for this user until risk review clears.",
+    "anomaly": "Escalate to SOC queue and monitor subsequent transactions for 24h.",
+}
+
+
+def generate_mitigation(shap_top3: list = None, fraud_type: str = "anomaly") -> str:
+    """Map top SHAP feature names (and fraud type) to an actionable mitigation string."""
+    shap_top3 = shap_top3 or []
+    for feat in shap_top3:
+        name = str(feat.get("name") or feat.get("display_name") or "").lower()
+        direction = feat.get("direction", "increases_risk")
+        if direction != "increases_risk":
+            continue
+        for key, action in MITIGATION_BY_FEATURE.items():
+            if key in name:
+                return action
+    return MITIGATION_BY_TYPE.get(fraud_type, MITIGATION_BY_TYPE["anomaly"])
+
+
 if __name__ == "__main__":
     # Test explanations for each fraud type
     test_txn = {"amount": 42500, "hour_of_day": 2, "tx_count_2min": 9,

@@ -98,27 +98,32 @@ class UserProfileEngine:
             p["typical_hours"][hour] = p["typical_hours"].get(hour, 0) + 1
 
 
-def build_profiles_from_csv(csv_path: str):
+def build_profiles_from_dataframe(df: pd.DataFrame, skip_fraud: bool = True):
     """
-    Utility to bootstrap the user profiles from the M1 dataset.
+    Bootstrap user profiles from a dataframe.
+    When skip_fraud=True, fraud rows are excluded so amount baselines stay clean.
     """
-    print(f"[Profiler] Building initial profiles from {csv_path}...")
+    print(f"[Profiler] Building profiles from dataframe ({len(df):,} rows, skip_fraud={skip_fraud})...")
     t0 = time()
-    df = pd.read_csv(csv_path)
-    
     engine = UserProfileEngine()
-    
-    # We will build profiles for only the first 5000 users or full dataset.
-    # The dataset has 500k rows, iterating over them in pandas is slow but manageable (takes ~10-20 sec)
-    for row in df.itertuples(index=False):
-        # row._asdict() is fast
+    work = df
+    if skip_fraud and "fraud_label" in df.columns:
+        work = df[df["fraud_label"] == 0]
+    for row in work.itertuples(index=False):
         txn = row._asdict()
-        engine.update_profile(txn['user_id'], txn)
-        
+        engine.update_profile(txn["user_id"], txn)
     engine.save()
-    print(f"[Profiler] Initial profile building complete in {time() - t0:.2f} seconds.")
+    print(f"[Profiler] Built {len(engine.profiles)} profiles in {time() - t0:.2f}s.")
+    return engine
+
+
+def build_profiles_from_csv(csv_path: str, skip_fraud: bool = True):
+    """Utility to bootstrap the user profiles from the M1 dataset."""
+    print(f"[Profiler] Building initial profiles from {csv_path}...")
+    df = pd.read_csv(csv_path)
+    return build_profiles_from_dataframe(df, skip_fraud=skip_fraud)
+
 
 if __name__ == "__main__":
-    # When run directly, build the user_profiles.pkl
     csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "upi_transactions.csv")
-    build_profiles_from_csv(csv_path)
+    build_profiles_from_csv(csv_path, skip_fraud=True)

@@ -1,5 +1,5 @@
 import { useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, AttributionControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Map } from 'lucide-react';
 
@@ -10,6 +10,7 @@ const CITY_COORDS: Record<string, [number, number]> = {
   'Mumbai': [19.0760, 72.8777], 'Ahmedabad': [23.0225, 72.5714],
   'Surat': [21.1702, 72.8311], 'Gurugram': [28.4595, 77.0266],
   'Noida': [28.5355, 77.3910], 'Bengaluru': [12.9716, 77.5946],
+  'Bangalore': [12.9716, 77.5946],
   'Jaipur': [26.9124, 75.7873], 'Indore': [22.7196, 75.8577],
   'Nagpur': [21.1458, 79.0882], 'Ludhiana': [30.9010, 75.8523],
   'Bhopal': [23.2599, 77.4126], 'Chandigarh': [30.7333, 76.7794],
@@ -17,13 +18,40 @@ const CITY_COORDS: Record<string, [number, number]> = {
   'Lucknow': [26.8467, 80.9462]
 };
 
+/** Quadratic Bezier arc between two lat/lng points (control point bowed sideways). */
+function quadraticBezierArc(
+  from: [number, number],
+  to: [number, number],
+  segments = 32,
+  bend = 0.35
+): [number, number][] {
+  const [lat1, lon1] = from;
+  const [lat2, lon2] = to;
+  const midLat = (lat1 + lat2) / 2;
+  const midLon = (lon1 + lon2) / 2;
+  const dLat = lat2 - lat1;
+  const dLon = lon2 - lon1;
+  // Perpendicular offset for the control point
+  const ctrlLat = midLat + (-dLon) * bend;
+  const ctrlLon = midLon + dLat * bend;
+
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const u = 1 - t;
+    const lat = u * u * lat1 + 2 * u * t * ctrlLat + t * t * lat2;
+    const lon = u * u * lon1 + 2 * u * t * ctrlLon + t * t * lon2;
+    pts.push([lat, lon]);
+  }
+  return pts;
+}
+
 interface Props {
   transactions: any[];
   alerts: any[];
 }
 
 export default function GeoMap({ transactions, alerts }: Props) {
-  // Fix Leaflet container size bug by triggering resize.
   useEffect(() => {
     const handleResize = () => {
       window.dispatchEvent(new Event('resize'));
@@ -32,30 +60,28 @@ export default function GeoMap({ transactions, alerts }: Props) {
   }, []);
 
   const { txns, arcs } = useMemo(() => {
-    // Only plot last 200
     const txns = transactions.slice(0, 200).filter(t => CITY_COORDS[t.location_city]);
-    
-    // Calculate last 20 location jumps
+
     const jumpAlerts = alerts.filter(a => a.fraud_type_predicted === 'location_jump').slice(0, 20);
-    const arcs: { id: string, from: [number, number], to: [number, number] }[] = [];
-    
+    const arcs: { id: string; positions: [number, number][] }[] = [];
+
     for (const alert of jumpAlerts) {
       if (!CITY_COORDS[alert.location_city]) continue;
-      // find previous txn for same user
       const userTxns = transactions.filter(t => t.user_id === alert.user_id && CITY_COORDS[t.location_city]);
       const idx = userTxns.findIndex(t => t.transaction_id === alert.transaction_id);
       if (idx !== -1 && idx + 1 < userTxns.length) {
-        const prevTxn = userTxns[idx + 1]; // array is reversed (newest first)
+        const prevTxn = userTxns[idx + 1];
         if (prevTxn.location_city !== alert.location_city) {
-            arcs.push({
-                id: alert.transaction_id,
-                from: CITY_COORDS[prevTxn.location_city],
-                to: CITY_COORDS[alert.location_city]
-            });
+          const from = CITY_COORDS[prevTxn.location_city];
+          const to = CITY_COORDS[alert.location_city];
+          arcs.push({
+            id: alert.transaction_id,
+            positions: quadraticBezierArc(from, to),
+          });
         }
       }
     }
-    
+
     return { txns, arcs };
   }, [transactions, alerts]);
 
@@ -72,23 +98,26 @@ export default function GeoMap({ transactions, alerts }: Props) {
             <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-red-400"></span> Jump Arc</span>
         </div>
       </div>
-      <div className="flex-1 w-full relative z-0">
-        <MapContainer 
-            center={[21.0, 78.0]} 
-            zoom={4.5} 
+      <div className="flex-1 w-full relative z-0 leaflet-dark-tiles">
+        <MapContainer
+            center={[21.0, 78.0]}
+            zoom={4.5}
             className="w-full h-full"
             style={{ backgroundColor: '#0D1117' }}
             attributionControl={false}
         >
+          <AttributionControl position="bottomright" prefix={false} />
           <TileLayer
-            url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            maxZoom={19}
           />
-          
+
           {arcs.map(arc => (
-             <Polyline 
+             <Polyline
                 key={arc.id}
-                positions={[arc.from, arc.to]} 
-                pathOptions={{ color: '#da3633', weight: 3, dashArray: '5, 5', className: 'animate-pulse opacity-70' }} 
+                positions={arc.positions}
+                pathOptions={{ color: '#da3633', weight: 3, className: 'animate-pulse opacity-70' }}
              />
           ))}
 
@@ -97,8 +126,8 @@ export default function GeoMap({ transactions, alerts }: Props) {
               key={t.transaction_id}
               center={CITY_COORDS[t.location_city]}
               radius={t.should_display_alert ? 8 : 4}
-              pathOptions={{ 
-                  color: t.should_display_alert ? '#da3633' : '#238636', 
+              pathOptions={{
+                  color: t.should_display_alert ? '#da3633' : '#238636',
                   fillColor: t.should_display_alert ? '#da3633' : '#238636',
                   fillOpacity: 0.8,
                   weight: 1

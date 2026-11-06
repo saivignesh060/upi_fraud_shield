@@ -24,6 +24,7 @@ interface Transaction {
   shap_top3?: any[];
   shap?: any[];
   explanation?: any;
+  mitigation?: string;
 }
 
 interface Metrics {
@@ -33,8 +34,8 @@ interface Metrics {
 }
 
 // --- Constants ---
-const API_BASE = 'http://localhost:8000';
-const WS_URL = 'ws://localhost:8000/stream?tps=20&rows=10000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const WS_URL = `${API_BASE.replace('https', 'wss').replace('http', 'ws')}/stream?tps=20&rows=10000`;
 
 const METRIC_COLORS = {
   legit: '#238636',   // green
@@ -67,15 +68,24 @@ export default function App() {
 
   // --- WebSocket Connection (Panel 1 & 4) ---
   useEffect(() => {
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
     const connectWs = () => {
+      if (cancelled) return;
       const ws = new WebSocket(WS_URL);
       
-      ws.onopen = () => setIsConnected(true);
-      ws.onclose = () => {
-        setIsConnected(false);
-        setTimeout(connectWs, 3000); // Retry 3s
+      ws.onopen = () => {
+        if (!cancelled) setIsConnected(true);
       };
-      ws.onerror = () => setIsConnected(false);
+      ws.onclose = () => {
+        if (cancelled) return;
+        setIsConnected(false);
+        retryTimer = setTimeout(connectWs, 3000); // Retry 3s
+      };
+      ws.onerror = () => {
+        if (!cancelled) setIsConnected(false);
+      };
       
       ws.onmessage = (event) => {
         try {
@@ -118,7 +128,11 @@ export default function App() {
     };
 
     connectWs();
-    return () => wsRef.current?.close();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      wsRef.current?.close();
+    };
   }, []);
 
   // --- REST Polling (Panels 2, 3, 5, 6) ---
@@ -336,6 +350,13 @@ export default function App() {
                       <p className="text-sm text-gray-300 mt-3 pl-2 border-l-2 border-gray-700 ml-1 py-1 italic">
                         "{a.explanation.short_summary}"
                       </p>
+                    )}
+
+                    {a.mitigation && (
+                      <div className="mt-3 ml-1 pl-2 border-l-2 border-emerald-700/60">
+                        <div className="text-xs uppercase tracking-wide text-emerald-500/80 font-semibold mb-0.5">Mitigation</div>
+                        <p className="text-sm text-emerald-100/90">{a.mitigation}</p>
+                      </div>
                     )}
 
                     {/* SHAP Mini Chart inside card */}

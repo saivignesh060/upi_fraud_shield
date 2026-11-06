@@ -25,6 +25,8 @@ Thumbs.db
 # Project Specific
 data/
 *.csv
+benchmarks/creditcard.csv
+benchmarks/ieee_cis/
 temp_dummy/
 models/*.sav
 notebooks/.ipynb_checkpoints/

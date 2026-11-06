@@ -1,0 +1,56 @@
+{
+  "dataset": "ULB Credit Card Fraud (creditcard.csv)",
+  "split": "time-ordered 70/15/15",
+  "sizes": {
+    "train": 199364,
+    "val": 42721,
+    "test": 42722
+  },
+  "fraud_rates": {
+    "train": 0.0019261250777472363,
+    "val": 0.001310830738980829,
+    "test": 0.0012171714807359207
+  },
+  "threshold_selection": {
+    "threshold": 0.14843416213989258,
+    "precision": 0.5,
+    "recall": 0.875,
+    "cost": 119.0,
+    "method": "max_recall_precision>=0.5",
+    "tp": 49,
+    "fp": 49,
+    "fn": 7,
+    "tn": 42616
+  },
+  "val": {
+    "split": "Val",
+    "threshold": 0.14843416213989258,
+    "precision": 0.5,
+    "recall": 0.875,
+    "f1": 0.6363636363636364,
+    "roc_auc": 0.9828786559742847,
+    "pr_auc": 0.8661696798580703,
+    "fraud_rate": 0.001310830738980829,
+    "n": 42721,
+    "tp": 49,
+    "fp": 49,
+    "tn": 42616,
+    "fn": 7
+  },
+  "test": {
+    "split": "Test",
+    "threshold": 0.14843416213989258,
+    "precision": 0.46987951807228917,
+    "recall": 0.75,
+    "f1": 0.5777777777777777,
+    "roc_auc": 0.9822704656487173,
+    "pr_auc": 0.7646668792762215,
+    "fraud_rate": 0.0012171714807359207,
+    "n": 42722,
+    "tp": 39,
+    "fp": 44,
+    "tn": 42626,
+    "fn": 13
+  },
+  "note": "Separate from UPI synthetic pipeline; does not modify UPI models."
+}

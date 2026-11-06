@@ -120,7 +120,7 @@ npm run dev
 
 ## 📊 Measured model metrics (test set)
 
-Leak-free training: **per-user chronological 70/15/15 split**, baselines from **train legitimate rows only**, threshold chosen on validation (max recall s.t. precision ≥ 0.5). Dataset uses `FRAUD_RATE=0.008` with hard negatives and overlapping fraud signals (see Limitations). Figures from `models/xgb_metrics.json` on this machine:
+These metrics are from **synthetic** UPI data (not production traffic). Leak-free training: **per-user chronological 70/15/15 split**, baselines from **train legitimate rows only**, threshold chosen on validation (max recall s.t. precision ≥ 0.5). Dataset uses `FRAUD_RATE=0.008` with hard negatives and overlapping fraud signals (see Limitations). Figures from `models/xgb_metrics.json` on this machine:
 
 | Metric | Value |
 |---|---|
